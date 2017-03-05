@@ -1,7 +1,6 @@
 @echo off
 :: WHAT: Script to launch multiple chromes
-:: Find CHROME_EXE
-:: set CHROME_EXE using registry
+:: Find CHROME_EXE and set CHROME_EXE using registry
   @for /f "delims=" %%a in ('
     regtool list -v "/machine/SOFTWARE/Microsoft/Windows/CurrentVersion/App Paths/chrome.exe" ^| ^
     perl -ne "print if s/Path.*=\s*//"
@@ -14,7 +13,6 @@
   ') do (
     @set CHROME_EXE=%%a
   )
-
 :: fallback search for CHROME_EXE
   @for %%D in (
       %CHROME_EXE%
@@ -29,36 +27,42 @@
       goto :found_chrome_exe
     )
   )
-
 :: Final check for CHROME_EXE
+  :found_chrome_exe
   @IF not EXIST %CHROME_EXE% (
     @echo NO CHROME_EXE=%CHROME_EXE%
     goto :eof
   )
-:found_chrome_exe
 :: Get the args
   if [%1] == [] (
     @echo USAGE: CHROME2.CMD GMAILID CTMPDIR URL
-    @echo USAGE: CHROME2.CMD me                 .. default gmail
+    @echo USAGE: CHROME2.CMD myself   .. default gmail
     goto :eof
   )
   set GMAILID=%1
   set CTMPDIR=%2
   set URL=%3
 :: Start default chrome
-  if [%GMAILID%] == [me] (
+  if [%GMAILID%] == [myself] (
     @start %CHROME_EXE% %URL%
     goto :eof
   )
-:: Setup new temp directory for GMAILID
-  if [%CTMPDIR%] == [] (
-    set CTMPDIR=%TEMP%
+:: Find a temp directory
+  @for /f "delims=," %%a in ( "n:\temp,c:\temp,c:\tmp,%TEMP%,%TMP%" ) do (
+    @IF EXIST %%a\nul (
+      @set CTMPDIR=%%a
+      goto :have_ctmpdir
+    )
   )
+  :: fall thru and report missing temp
+  :have_ctmpdir
+:: Check temp directory exist
   @IF not EXIST %CTMPDIR%\nul (
     @echo chrome2.cmd missing CTMPDIR=%CTMPDIR%
     goto :eof
   )
-:: Set chrome data dir
+  @echo Found CTMPDIR=%CTMPDIR%
+:: Setup temp chrome data dir
   set     CDATA=%CTMPDIR%\chrome2-data-%GMAILID%
   @echo   CDATA=%CDATA%
   @mkdir %CDATA%
