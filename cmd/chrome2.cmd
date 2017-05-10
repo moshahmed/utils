@@ -71,6 +71,6 @@
     set URL=gmail.com
   )
 :: Launch Chrome
-  @echo       CHROME_EXE  --user-data-dir=%CDATA% %URL%
-  @echo start %CHROME_EXE% --user-data-dir=%CDATA% %URL%
+  @echo CHROME_EXE  --user-data-dir=%CDATA% %URL%
+  start %CHROME_EXE% --user-data-dir=%CDATA% %URL%
   goto :eof
