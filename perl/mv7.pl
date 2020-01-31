@@ -11,7 +11,7 @@ use File::Find;
 
 my %groups;
 
-my $grouper = q,\b((\d{4})\W?(\d{2})\W?(\d{2}))\b,;
+my $grouper;  
 my ($verbose, $showcount, $mv, $header,$sortcount) = (0,0,1,0,0);
 my ($bydir,$byloc);
 my ($fcount,$gcount);
@@ -20,7 +20,7 @@ my $USAGE  = <<"END_USAGE";
 USAGE: cmd [options] [DIR,list.txt]
 WHAT: group files by pattern
 Options:
-  -by:regex  .. Group by, default: -by=$grouper
+  -by:regex  .. Group by, default: -by=grouper-regex
                 eg. -by:(2019\\d\\d) by month, -by:(20\\d\\d) by year
   -bydir     .. group each dir separately.
   -byloc     .. group by location using exiftool to get latlong
@@ -31,6 +31,8 @@ Options:
   -find:dir  .. find files and group.
   -s:[+-]100 .. sort by count asc/desc, and show counts gt/lt 100, default sort by group name.
   -h,-v      .. help, verbose
+Notes:
+  list.txt generated: find . -printf "%y%d\\t%12s\\t%TY-%Tm-%Td-%TH%TM\\t%p %l\\n" > list.txt
 END_USAGE
 
 while( $_ = $ARGV[0], defined($_) && m/^-/ ){ shift; last if /^--$/; if(0){
@@ -40,6 +42,7 @@ while( $_ = $ARGV[0], defined($_) && m/^-/ ){ shift; last if /^--$/; if(0){
   }elsif( m/^-bydir$/    ){ $bydir=1;
   }elsif( m/^-byloc$/    ){ unshift(@ARGV,'-byloc5');
   }elsif( m/^-byloc(\d+)$/    ){ $byloc="exiftool -c %.".$1."f -GPSPosition ";
+    $grouper = '(loc_.+)';
     warn "# byloc=$byloc\n";
   }elsif( m/^-mv$/    ){ $mv=1;
   }elsif( m/^-c$/    ){ $showcount=1;
@@ -52,6 +55,9 @@ $showcount=1
   unless $showcount or $mv;
 
 # Add default whole parenthesis if missing for matching groups.
+$grouper = q,\b((\d{4})\W?(\d{2})\W?(\d{2}))\b,
+  unless $grouper;
+
 $grouper = "($grouper)"
   unless $grouper =~ m,[(].*[)],;
 
@@ -111,8 +117,12 @@ sub group_add {
   my ($tomatch)= $file;
   if( $byloc && -f "$dir/$file" ){
     my $latlong = `$byloc $dir/$file`;
-    if ($latlong =~ m/:\s+(\d+)\.(\d+)\s([NS]),\s+(\d+)\.(\d+)\s([EW])/ ){
-      $latlong = "loc_$1_$2$3-$4_$5$6";
+    # if ($latlong =~ m/:\s+(\d+)\.(\d+)\s([NS]),\s+(\d+)\.(\d+)\s([EW])/ ){
+    #   $latlong = "loc_$1_$2$3-$4_$5$6";
+    # }
+    if ($latlong =~ m/:\s+(.+)/ ){
+      $latlong = "loc_$1";
+      $latlong =~ s/[\s,]+//g;
     }
     $tomatch = $latlong;
   }
