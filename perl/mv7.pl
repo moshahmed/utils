@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 # What: group files by date/location (with exiftool)
+# test: perl -e 'system(qq/exiftool -c "%.4f" -GPSPosition x.jpg/)'
+#       $latlong = q/GPS Position : 18.2213 N, 72.2781 E/;
 # from https://unix.stackexchange.com/questions/49701/bash-grouping-files-by-name/49756
 # 2019-12-21
 
@@ -21,11 +23,12 @@ Options:
   -by:regex  .. Group by, default: -by=$grouper
                 eg. -by:(2019\\d\\d) by month, -by:(20\\d\\d) by year
   -bydir     .. group each dir separately.
+  -byloc     .. group by location using exiftool to get latlong
+                eg. -byloc5 for 5 decimal latlong from img
+                eg. cmd -mv -byloc2 -by:loc.+ .
   -c         .. just showcount
   -mv        .. show mv files group/, eg. cmd -mv .. | vi - and :%!bash
   -find:dir  .. find files and group.
-  -byloc     .. group by location, (-byloc5 for 5 decimal lat-long from img)
-                eg. cmd -mv -byloc2 -by:loc.+ .
   -s:[+-]100 .. sort by count asc/desc, and show counts gt/lt 100, default sort by group name.
   -h,-v      .. help, verbose
 END_USAGE
@@ -37,7 +40,6 @@ while( $_ = $ARGV[0], defined($_) && m/^-/ ){ shift; last if /^--$/; if(0){
   }elsif( m/^-bydir$/    ){ $bydir=1;
   }elsif( m/^-byloc$/    ){ unshift(@ARGV,'-byloc5');
   }elsif( m/^-byloc(\d+)$/    ){ $byloc="exiftool -c %.".$1."f -GPSPosition ";
-    # test: perl -e 'system(qq/exiftool -c "%.4f" -GPSPosition x.jpg/)'
     warn "# byloc=$byloc\n";
   }elsif( m/^-mv$/    ){ $mv=1;
   }elsif( m/^-c$/    ){ $showcount=1;
@@ -108,7 +110,6 @@ sub group_add {
   my ($dir,$file)=@_;
   my ($tomatch)= $file;
   if( $byloc && -f "$dir/$file" ){
-    # $latlong= q/GPS Position : 18.9758 N, 72.8420 E/;
     my $latlong = `$byloc $dir/$file`;
     if ($latlong =~ m/:\s+(\d+)\.(\d+)\s([NS]),\s+(\d+)\.(\d+)\s([EW])/ ){
       $latlong = "loc_$1_$2$3-$4_$5$6";
