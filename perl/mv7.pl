@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# What: group files by date/location (with exiftool)
+# What: Group files by date/location (with exiftool)
 # test: perl -e 'system(qq/exiftool -c "%.4f" -GPSPosition x.jpg/)'
 #       $latlong = q/GPS Position : 18.2213 N, 72.2781 E/;
 # from https://unix.stackexchange.com/questions/49701/bash-grouping-files-by-name/49756
@@ -17,22 +17,29 @@ my ($bydir,$byloc);
 my ($fcount,$gcount);
 
 my $USAGE  = <<"END_USAGE";
-USAGE: cmd [options] [DIR,list.txt]
-WHAT: group files by pattern
-Options:
+USAGE: cmd [OPTIONS] [-by...] [DIR or list.txt] | vi - and :%!bash
+WHAT: group files by pattern .. prints grouper.sh bash script to mv files to dir-groups
+OPTIONS:
   -by:regex  .. Group by, default: -by=grouper-regex
                 eg. -by:(2019\\d\\d) by month, -by:(20\\d\\d) by year
   -bydir     .. group each dir separately.
   -byloc     .. group by location using exiftool to get latlong
-                eg. -byloc5 for 5 decimal latlong from img
-                eg. cmd -mv -byloc2 -by:loc.+ .
-  -c         .. just showcount
+                Eg. -byloc5 for 5 decimal latlong from img
+                Eg. cmd -mv -byloc2 -by:loc.+ .
+  -c         .. showcount
   -mv        .. show mv files group/, eg. cmd -mv .. | vi - and :%!bash
-  -find:dir  .. find files and group.
-  -s:[+-]100 .. sort by count asc/desc, and show counts gt/lt 100, default sort by group name.
+
+  -s:[-+]100 .. sortcount asc/desc, show counts lt/gt 100, default sort by group name.
+    -lt:N -gt:N    eg. -lt:44 -gt:77 .. only move groups less/more than 44/77.
+
   -h,-v      .. help, verbose
 Notes:
-  list.txt generated: find . -printf "%y%d\\t%12s\\t%TY-%Tm-%Td-%TH%TM\\t%p %l\\n" > list.txt
+  DIR        .. calls find DIR or generate list.txt with
+                > find . -printf "%y%d\\t%12s\\t%TY-%Tm-%Td-%TH%TM\\t%p %l\\n" > list.txt
+  Idempotent .. Wont move already grouped dirs/files.
+Example:
+  > mv7.sh -c .  .. Counts
+  > mv7.sh -gt:5 .. Show mv of dirs having more than 5.
 END_USAGE
 
 while( $_ = $ARGV[0], defined($_) && m/^-/ ){ shift; last if /^--$/; if(0){
@@ -41,12 +48,17 @@ while( $_ = $ARGV[0], defined($_) && m/^-/ ){ shift; last if /^--$/; if(0){
   }elsif( m/^-by:(.*)$/    ){ $grouper=$1;
   }elsif( m/^-bydir$/    ){ $bydir=1;
   }elsif( m/^-byloc$/    ){ unshift(@ARGV,'-byloc5');
-  }elsif( m/^-byloc(\d+)$/    ){ $byloc="exiftool -c %.".$1."f -GPSPosition ";
+  }elsif( m/^-byloc(\d+)$/    ){
+    $byloc="exiftool -c %.".$1."f -GPSPosition ";
     $grouper = '(loc_.+)';
     warn "# byloc=$byloc\n";
   }elsif( m/^-mv$/    ){ $mv=1;
   }elsif( m/^-c$/    ){ $showcount=1;
+  
+  }elsif( m/^-lt:(\d+)$/    ){ $sortcount=-$1;
+  }elsif( m/^-gt:(\d+)$/    ){ $sortcount=+$1;
   }elsif( m/^-s:([+-]\d+)$/    ){ $sortcount=$1;
+
   }else{ die $USAGE,"Unknown option '$_'\n"; }
 }
 
@@ -60,6 +72,8 @@ $grouper = q,\b((\d{4})\W?(\d{2})\W?(\d{2}))\b,
 
 $grouper = "($grouper)"
   unless $grouper =~ m,[(].*[)],;
+
+print "# grouper=m{$grouper}\n" if $verbose;
 
 die $USAGE."Need dir or list.txt to process.\n"
   unless @ARGV;
@@ -93,14 +107,16 @@ sub sort_groups {
 }
 
 sub print_groups {
+  my $moves=0;
   for my $group (@sorted) {
       my $files_arr_ref = $groups{$group};
       my $sc = scalar(@{$files_arr_ref});
-      next if $sortcount > 0 && $sc < $sortcount;  # show larger asc
+      next if $sortcount > 0 && $sc <  $sortcount; # show larger asc
       next if $sortcount < 0 && $sc > -$sortcount; # show smaller desc
+      $moves += $sc;
       if ( $showcount ) {
-        print("CNT GROUP\n") unless $header++;
-        printf("%3d %s\n",  $sc, $group );
+        print("# CNT GROUP of files to move\n") unless $header++;
+        printf("# %3d %s/\n",  $sc, $group );
         next;
       }
       if ( $mv ) {
@@ -110,6 +126,7 @@ sub print_groups {
         }
       }
   }
+  printf("# groups=%d, moves=%d\n",scalar(@sorted),$moves);
 }
 
 sub group_add {
@@ -126,6 +143,10 @@ sub group_add {
     }
     $tomatch = $latlong;
   }
+
+  # Idempotent, if already grouped into dir?
+  return if $dir =~ m/$grouper/io;
+
   return unless $tomatch =~ m/$grouper/o;
   $fcount++;
   $gcount++;
